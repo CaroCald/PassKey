@@ -1,5 +1,8 @@
 package com.google.credentialmanager.sample.data.repository
 
+import com.google.credentialmanager.sample.data.models.LoginFinishRequest
+import com.google.credentialmanager.sample.data.models.LoginStartResponse
+import com.google.credentialmanager.sample.data.models.PasskeyLoginResponse
 import com.google.credentialmanager.sample.data.models.RegisterFinish
 import com.google.credentialmanager.sample.data.models.UserRequest
 import com.google.credentialmanager.sample.data.models.UserResponse
@@ -24,6 +27,24 @@ class UserRepository @Inject constructor(
     fun doARegisterFinish(registerFinish: RegisterFinish) : Flow<Result<Boolean>> {
         return  flow {
             emit(Result.success(loginService.doRegisterFinish(registerFinish)))
+
+        }.catch { error ->
+            emit(Result.failure(BasicErrorHandler(error)))
+        }
+    }
+
+    fun doLoginStart(userRequest: UserRequest) : Flow<Result<LoginStartResponse>> {
+        return  flow {
+            emit(Result.success(loginService.doLoginStart(userRequest)))
+
+        }.catch { error ->
+            emit(Result.failure(BasicErrorHandler(error)))
+        }
+    }
+
+    fun doLoginFinish(passkeyLoginResponse: LoginFinishRequest) : Flow<Result<Boolean>> {
+        return  flow {
+            emit(Result.success(loginService.doLoginFinish(passkeyLoginResponse)))
 
         }.catch { error ->
             emit(Result.failure(BasicErrorHandler(error)))

@@ -30,16 +30,39 @@ import androidx.credentials.GetPublicKeyCredentialOption
 import androidx.credentials.PasswordCredential
 import androidx.credentials.PublicKeyCredential
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import com.google.credentialmanager.sample.data.models.LoginFinishRequest
+import com.google.credentialmanager.sample.data.models.PasskeyLoginResponse
+import com.google.credentialmanager.sample.data.models.UserRequest
 import com.google.credentialmanager.sample.databinding.FragmentSignInBinding
+import com.google.credentialmanager.sample.viewModel.AutenticatorViewModel
+import com.google.credentialmanager.sample.viewModel.LoginViewModel
+import com.google.credentialmanager.sample.viewModel.ViewModelAutenticatorFactory
+import com.google.credentialmanager.sample.viewModel.ViewModelLoginFactory
+import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.WithFragmentBindings
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
+@AndroidEntryPoint
+@WithFragmentBindings
 class SignInFragment : Fragment() {
 
     private lateinit var credentialManager: CredentialManager
     private var _binding: FragmentSignInBinding? = null
     private val binding get() = _binding!!
     private lateinit var listener: SignInFragmentCallback
+
+    private lateinit var viewModel: LoginViewModel
+
+    private lateinit var viewModelAutenticator: AutenticatorViewModel
+
+    @Inject
+    lateinit var viewModelFactory: ViewModelLoginFactory
+    @Inject
+    lateinit var autenticatorViewModelFactory: ViewModelAutenticatorFactory
+
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
@@ -50,6 +73,11 @@ class SignInFragment : Fragment() {
         }
     }
 
+    private fun setupViewModel() {
+        viewModel = ViewModelProvider(this, viewModelFactory)[LoginViewModel::class.java]
+        viewModelAutenticator = ViewModelProvider(this, autenticatorViewModelFactory)[AutenticatorViewModel::class.java]
+
+    }
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -61,7 +89,7 @@ class SignInFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
+        setupViewModel()
         credentialManager = CredentialManager.create(requireActivity())
 
         binding.signInWithSavedCredentials.setOnClickListener(signInWithSavedCredentials())
@@ -72,15 +100,41 @@ class SignInFragment : Fragment() {
 
             lifecycleScope.launch {
                 configureViews(View.VISIBLE, false)
+                finishRegisterFromServer("caro")
 
-                val data = getSavedCredentials()
+                var dataString: String
+                viewModel.finishRLoginStart.observe(viewLifecycleOwner){ it ->
+                    dataString = viewModelAutenticator.getResponseLoginInString(it)
+                    viewLifecycleOwner.lifecycleScope.launch{
+                        val data = getSavedCredentials(dataString)
 
-                configureViews(View.INVISIBLE, true)
+                        val obj = data?.let { response ->
+                            viewModelAutenticator.fromStringToObjectLoginPassKeyResponse(
+                                response
+                            )
+                        }
 
-                data?.let {
-                    sendSignInResponseToServer()
-                    listener.showHome()
+                        data?.let {
+                            sendSignInResponseToServer(obj)
+
+                        }
+
+                        viewModel.finishRLogin.observe(viewLifecycleOwner){ it1 ->
+                            if(it1){
+                                listener.showHome()
+                            }else{
+                                activity?.showErrorAlert("Error auth server")
+                            }
+
+                            configureViews(View.INVISIBLE, true)
+                        }
+                    }
+
                 }
+
+
+
+
             }
         }
     }
@@ -95,17 +149,21 @@ class SignInFragment : Fragment() {
         binding.circularProgressIndicator.visibility = visibility
     }
 
-    private fun fetchAuthJsonFromServer(): String {
-        return requireContext().readFromAsset("AuthFromServer")
+    private fun  finishRegisterFromServer(user: String){
+        val userRequest = UserRequest(user)
+        viewModel.doLoginStart(userRequest)
     }
 
-    private fun sendSignInResponseToServer(): Boolean {
-        return true
+    private fun sendSignInResponseToServer(obj: PasskeyLoginResponse?){
+
+        if (obj != null) {
+            viewModel.doLoginFinish(LoginFinishRequest("caro", obj))
+        }
     }
 
-    private suspend fun getSavedCredentials(): String? {
+    private suspend fun getSavedCredentials(dataString: String): String? {
         val getPublicKeyCredentialOption =
-            GetPublicKeyCredentialOption(fetchAuthJsonFromServer(), null)
+            GetPublicKeyCredentialOption(dataString, null)
         val getPasswordOption = GetPasswordOption()
         val result = try {
             credentialManager.getCredential(
@@ -129,7 +187,7 @@ class SignInFragment : Fragment() {
         if (result.credential is PublicKeyCredential) {
             val cred = result.credential as PublicKeyCredential
             DataProvider.setSignedInThroughPasskeys(true)
-            return "Passkey: ${cred.authenticationResponseJson}"
+            return cred.authenticationResponseJson
         }
         if (result.credential is PasswordCredential) {
             val cred = result.credential as PasswordCredential

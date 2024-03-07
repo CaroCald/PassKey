@@ -1,6 +1,6 @@
 package com.google.credentialmanager.sample.data.models
 
-data class RegisterFinish(
+data class LoginFinishRequest(
     val username: String,
-    val data: RegisterKeyResponse,
+    val data: PasskeyLoginResponse,
 )

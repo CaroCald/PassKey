@@ -40,8 +40,8 @@ import androidx.credentials.exceptions.publickeycredential.CreatePublicKeyCreden
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import com.google.credentialmanager.sample.data.models.GetPasskeyResponseData
 import com.google.credentialmanager.sample.data.models.RegisterFinish
+import com.google.credentialmanager.sample.data.models.RegisterKeyResponse
 import com.google.credentialmanager.sample.data.models.UserRequest
 import com.google.credentialmanager.sample.databinding.FragmentSignUpBinding
 import com.google.credentialmanager.sample.viewModel.AutenticatorViewModel
@@ -51,7 +51,6 @@ import com.google.credentialmanager.sample.viewModel.ViewModelLoginFactory
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.WithFragmentBindings
 import kotlinx.coroutines.launch
-import java.security.SecureRandom
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -154,26 +153,32 @@ class SignUpFragment : Fragment() {
                     configureViews(View.VISIBLE, false)
 
                     fetchRegistrationJsonFromServer()
-                    var data: String
-                    viewModel.userResponse.observe(viewLifecycleOwner) { it1 ->
-                        data = viewModelAutenticator.getResponseInString(it1)
-                        viewLifecycleOwner.lifecycleScope.launch{
-                            val dataPasskey = createPasskey(CreatePublicKeyCredentialRequest(data))
-                            dataPasskey?.let { it2 ->
-                                registerResponse(it2)
-                                viewModel.finishRegister.observe(viewLifecycleOwner){
-                                    println("FINISH REGISTER$it")
-                                    DataProvider.setSignedInThroughPasskeys(it)
-                                }
 
-                                listener.showHome()
-                            }
+                    viewModel.userResponse.observe(viewLifecycleOwner) { userResponse ->
+                        val data: String = viewModelAutenticator.getResponseInString(userResponse)
+                        registerPasskey(data)
+                    }
+                    viewModel.finishRegister.observe(viewLifecycleOwner){
+                        if (it){
+                            DataProvider.setSignedInThroughPasskeys(it)
+                        } else{
+                            activity?.showErrorAlert("Error finish register with server")
                         }
+                        configureViews(View.INVISIBLE, true)
                     }
 
-                    configureViews(View.INVISIBLE, true)
 
                 }
+            }
+        }
+    }
+
+    private fun registerPasskey(data: String){
+        viewLifecycleOwner.lifecycleScope.launch{
+            val dataPasskey = createPasskey(CreatePublicKeyCredentialRequest(data))
+            dataPasskey?.let { it2 ->
+                registerResponse(it2)
+                listener.showHome()
             }
         }
     }
@@ -183,33 +188,11 @@ class SignUpFragment : Fragment() {
         viewModel.getUserResponse(user)
     }
 
-    private fun  finishRegisterFromServer(response: GetPasskeyResponseData){
+    private fun  finishRegisterFromServer(response: RegisterKeyResponse){
         val user = UserRequest(binding.username.text.toString())
         val registerFinish = RegisterFinish( user.username, response)
         viewModel.getRegisterFinish(registerFinish)
     }
-
-
-    private fun getEncodedUserId(): String {
-        val random = SecureRandom()
-        val bytes = ByteArray(64)
-        random.nextBytes(bytes)
-        return Base64.encodeToString(
-            bytes,
-            Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING
-        )
-    }
-
-    private fun getEncodedChallenge(): String {
-        val random = SecureRandom()
-        val bytes = ByteArray(32)
-        random.nextBytes(bytes)
-        return Base64.encodeToString(
-            bytes,
-            Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING
-        )
-    }
-
     private suspend fun createPassword() {
         val request = CreatePasswordRequest(
             binding.username.text.toString(),
@@ -292,12 +275,12 @@ class SignUpFragment : Fragment() {
         activity?.showErrorAlert(msg)
     }
 
-    private fun registerResponse(createPublicKeyCredentialResponse: CreatePublicKeyCredentialResponse): Boolean {
+    private fun registerResponse(createPublicKeyCredentialResponse: CreatePublicKeyCredentialResponse) {
         println(createPublicKeyCredentialResponse)
         val obj = viewModelAutenticator.getResponseInObject(createPublicKeyCredentialResponse.registrationResponseJson)
-        val parcelableValue = createPublicKeyCredentialResponse.data.getBundle("")
-        finishRegisterFromServer(obj)
-        return true
+        viewLifecycleOwner.lifecycleScope.launch{
+            finishRegisterFromServer(obj)
+        }
     }
 
     override fun onDestroyView() {
