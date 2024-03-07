@@ -20,7 +20,6 @@ import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.Base64
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -64,13 +63,13 @@ class SignUpFragment : Fragment() {
 
     private lateinit var viewModel: LoginViewModel
 
-    private lateinit var viewModelAutenticator: AutenticatorViewModel
+    private lateinit var viewModelAuthenticator: AutenticatorViewModel
 
     @Inject
     lateinit var viewModelFactory: ViewModelLoginFactory
     @Inject
-    lateinit var autenticatorViewModelFactory: ViewModelAutenticatorFactory
-
+    lateinit var authenticatorViewModelFactory: ViewModelAutenticatorFactory
+    private lateinit var user : UserRequest
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
@@ -98,11 +97,17 @@ class SignUpFragment : Fragment() {
 
         binding.signUp.setOnClickListener(signUpWithPasskeys())
         binding.signUpWithPassword.setOnClickListener(signUpWithPassword())
+
+        viewModel.errorHandler.observe(viewLifecycleOwner){
+            configureViews(View.INVISIBLE, true)
+            activity?.showErrorAlert(it.message.toString())
+
+        }
     }
 
     private fun setupViewModel() {
         viewModel = ViewModelProvider(this, viewModelFactory)[LoginViewModel::class.java]
-        viewModelAutenticator = ViewModelProvider(this, autenticatorViewModelFactory)[AutenticatorViewModel::class.java]
+        viewModelAuthenticator = ViewModelProvider(this, authenticatorViewModelFactory)[AutenticatorViewModel::class.java]
 
     }
     private fun signUpWithPassword(): View.OnClickListener {
@@ -155,19 +160,19 @@ class SignUpFragment : Fragment() {
                     fetchRegistrationJsonFromServer()
 
                     viewModel.userResponse.observe(viewLifecycleOwner) { userResponse ->
-                        val data: String = viewModelAutenticator.getResponseInString(userResponse)
+                        val data: String = viewModelAuthenticator.getResponseInString(userResponse)
                         registerPasskey(data)
                     }
                     viewModel.finishRegister.observe(viewLifecycleOwner){
                         if (it){
+                            viewModelAuthenticator.saveUser(user)
                             DataProvider.setSignedInThroughPasskeys(it)
+                            listener.showHome()
                         } else{
                             activity?.showErrorAlert("Error finish register with server")
                         }
                         configureViews(View.INVISIBLE, true)
                     }
-
-
                 }
             }
         }
@@ -178,18 +183,17 @@ class SignUpFragment : Fragment() {
             val dataPasskey = createPasskey(CreatePublicKeyCredentialRequest(data))
             dataPasskey?.let { it2 ->
                 registerResponse(it2)
-                listener.showHome()
+
             }
         }
     }
 
     private fun  fetchRegistrationJsonFromServer(){
-        val user = UserRequest(binding.username.text.toString())
+        user = UserRequest(binding.username.text.toString())
         viewModel.getUserResponse(user)
     }
 
     private fun  finishRegisterFromServer(response: RegisterKeyResponse){
-        val user = UserRequest(binding.username.text.toString())
         val registerFinish = RegisterFinish( user.username, response)
         viewModel.getRegisterFinish(registerFinish)
     }
@@ -277,7 +281,7 @@ class SignUpFragment : Fragment() {
 
     private fun registerResponse(createPublicKeyCredentialResponse: CreatePublicKeyCredentialResponse) {
         println(createPublicKeyCredentialResponse)
-        val obj = viewModelAutenticator.getResponseInObject(createPublicKeyCredentialResponse.registrationResponseJson)
+        val obj = viewModelAuthenticator.getResponseInObject(createPublicKeyCredentialResponse.registrationResponseJson)
         viewLifecycleOwner.lifecycleScope.launch{
             finishRegisterFromServer(obj)
         }

@@ -56,12 +56,12 @@ class SignInFragment : Fragment() {
 
     private lateinit var viewModel: LoginViewModel
 
-    private lateinit var viewModelAutenticator: AutenticatorViewModel
+    private lateinit var viewModelAuthenticator: AutenticatorViewModel
 
     @Inject
     lateinit var viewModelFactory: ViewModelLoginFactory
     @Inject
-    lateinit var autenticatorViewModelFactory: ViewModelAutenticatorFactory
+    lateinit var authenticatorViewModelFactory: ViewModelAutenticatorFactory
 
 
     override fun onAttach(context: Context) {
@@ -75,7 +75,7 @@ class SignInFragment : Fragment() {
 
     private fun setupViewModel() {
         viewModel = ViewModelProvider(this, viewModelFactory)[LoginViewModel::class.java]
-        viewModelAutenticator = ViewModelProvider(this, autenticatorViewModelFactory)[AutenticatorViewModel::class.java]
+        viewModelAuthenticator = ViewModelProvider(this, authenticatorViewModelFactory)[AutenticatorViewModel::class.java]
 
     }
     override fun onCreateView(
@@ -93,6 +93,10 @@ class SignInFragment : Fragment() {
         credentialManager = CredentialManager.create(requireActivity())
 
         binding.signInWithSavedCredentials.setOnClickListener(signInWithSavedCredentials())
+
+        viewModel.errorHandler.observe(viewLifecycleOwner){
+           activity?.showErrorAlert(it.message.toString())
+        }
     }
 
     private fun signInWithSavedCredentials(): View.OnClickListener {
@@ -100,23 +104,23 @@ class SignInFragment : Fragment() {
 
             lifecycleScope.launch {
                 configureViews(View.VISIBLE, false)
-                finishRegisterFromServer("caro")
+                viewModelAuthenticator.recoverUserInfo()
+                    ?.let { it1 -> finishRegisterFromServer(it1.username) }
 
                 var dataString: String
-                viewModel.finishRLoginStart.observe(viewLifecycleOwner){ it ->
-                    dataString = viewModelAutenticator.getResponseLoginInString(it)
+                viewModel.finishRLoginStart.observe(viewLifecycleOwner){
+                    dataString = viewModelAuthenticator.getResponseLoginInString(it)
                     viewLifecycleOwner.lifecycleScope.launch{
                         val data = getSavedCredentials(dataString)
 
                         val obj = data?.let { response ->
-                            viewModelAutenticator.fromStringToObjectLoginPassKeyResponse(
+                            viewModelAuthenticator.fromStringToObjectLoginPassKeyResponse(
                                 response
                             )
                         }
 
                         data?.let {
                             sendSignInResponseToServer(obj)
-
                         }
 
                         viewModel.finishRLogin.observe(viewLifecycleOwner){ it1 ->
@@ -125,16 +129,10 @@ class SignInFragment : Fragment() {
                             }else{
                                 activity?.showErrorAlert("Error auth server")
                             }
-
                             configureViews(View.INVISIBLE, true)
                         }
                     }
-
                 }
-
-
-
-
             }
         }
     }
@@ -157,7 +155,8 @@ class SignInFragment : Fragment() {
     private fun sendSignInResponseToServer(obj: PasskeyLoginResponse?){
 
         if (obj != null) {
-            viewModel.doLoginFinish(LoginFinishRequest("caro", obj))
+            viewModelAuthenticator.recoverUserInfo()
+                ?.let { LoginFinishRequest(it.username, obj) }?.let { viewModel.doLoginFinish(it) }
         }
     }
 

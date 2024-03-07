@@ -5,6 +5,7 @@ import com.google.credentialmanager.sample.data.models.LoginStartResponse
 import com.google.credentialmanager.sample.data.models.PasskeyLoginResponse
 import com.google.credentialmanager.sample.data.models.RegisterKeyResponse
 import com.google.credentialmanager.sample.data.models.UserData
+import com.google.credentialmanager.sample.data.models.UserRequest
 import com.google.credentialmanager.sample.data.models.UserResponse
 import com.google.gson.Gson
 import javax.inject.Inject
@@ -18,9 +19,9 @@ class AccountRepository @Inject constructor (
     /**
      * Save the user account to the local database
      */
-     fun saveUserAccount(userId: String, userData: UserData) {
+     fun saveUserAccount( userData: UserRequest) {
         with(sharedPreferences.edit()) {
-            putString(userId, gson.toJson(userData))
+            putString("userId", gson.toJson(userData))
             apply()
         }
     }
@@ -28,8 +29,9 @@ class AccountRepository @Inject constructor (
     /**
      * Retrieve the user account from the user id inside the local database
      */
-     fun getUserAccount(userId: String): UserData? {
-        return gson.fromJson(sharedPreferences.getString(userId, null), UserData::class.java)
+     fun getUserAccount(): UserRequest? {
+
+        return gson.fromJson(sharedPreferences.getString("userId", null), UserRequest::class.java)
     }
 
     /**

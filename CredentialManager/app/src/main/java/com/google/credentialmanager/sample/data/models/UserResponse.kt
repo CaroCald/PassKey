@@ -5,7 +5,8 @@ data class UserResponse (
     val rp: Rp,
     val user: User,
     val pubKeyCredParams: List<PubKeyCredParam>,
-    val authenticatorSelection: AuthenticatorSelection
+    val authenticatorSelection: AuthenticatorSelection,
+    val error: String
 )
 
 data class AuthenticatorSelection (

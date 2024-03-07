@@ -21,14 +21,18 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.credentials.ClearCredentialStateRequest
+import androidx.credentials.CredentialManager
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import com.google.credentialmanager.sample.databinding.FragmentHomeBinding
+import kotlinx.coroutines.launch
 
 class HomeFragment : Fragment() {
 
     private lateinit var binding: FragmentHomeBinding
     private lateinit var listener: HomeFragmentCallback
-
+    private lateinit var credentialManager: CredentialManager
     companion object {
         private const val LOGGED_IN_THROUGH_PASSWORD = "Logged in successfully through password"
         private const val LOGGED_IN_THROUGH_PASSKEYS = "Logged in successfully through passkeys"
@@ -52,11 +56,15 @@ class HomeFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
+        credentialManager = CredentialManager.create(requireActivity())
         configureSignedInText()
 
         binding.logout.setOnClickListener {
-            listener.logout()
+            lifecycleScope.launch {
+               // clearCredentials()
+                listener.logout()
+            }
+
         }
     }
 
@@ -66,6 +74,11 @@ class HomeFragment : Fragment() {
         } else {
             binding.signedInText.text = LOGGED_IN_THROUGH_PASSWORD
         }
+    }
+
+    private suspend fun clearCredentials(){
+
+        credentialManager.clearCredentialState(ClearCredentialStateRequest())
     }
 
     interface HomeFragmentCallback {
