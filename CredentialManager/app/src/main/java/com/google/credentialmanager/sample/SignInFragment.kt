@@ -36,6 +36,7 @@ import com.google.credentialmanager.sample.data.models.LoginFinishRequest
 import com.google.credentialmanager.sample.data.models.PasskeyLoginResponse
 import com.google.credentialmanager.sample.data.models.UserRequest
 import com.google.credentialmanager.sample.databinding.FragmentSignInBinding
+import com.google.credentialmanager.sample.utils.toJavaPublicKey
 import com.google.credentialmanager.sample.viewModel.AutenticatorViewModel
 import com.google.credentialmanager.sample.viewModel.LoginViewModel
 import com.google.credentialmanager.sample.viewModel.ViewModelAutenticatorFactory
@@ -96,6 +97,7 @@ class SignInFragment : Fragment() {
 
         viewModel.errorHandler.observe(viewLifecycleOwner){
            activity?.showErrorAlert(it.message.toString())
+            configureViews(View.INVISIBLE, true)
         }
     }
 
@@ -110,30 +112,43 @@ class SignInFragment : Fragment() {
                 var dataString: String
                 viewModel.finishRLoginStart.observe(viewLifecycleOwner){
                     dataString = viewModelAuthenticator.getResponseLoginInString(it)
-                    viewLifecycleOwner.lifecycleScope.launch{
-                        val data = getSavedCredentials(dataString)
-
-                        val obj = data?.let { response ->
-                            viewModelAuthenticator.fromStringToObjectLoginPassKeyResponse(
-                                response
-                            )
-                        }
-
-                        data?.let {
-                            sendSignInResponseToServer(obj)
-                        }
-
-                        viewModel.finishRLogin.observe(viewLifecycleOwner){ it1 ->
-                            if(it1){
-                                listener.showHome()
-                            }else{
-                                activity?.showErrorAlert("Error auth server")
-                            }
-                            configureViews(View.INVISIBLE, true)
-                        }
-                    }
+                    getCredentialsInfo(dataString)
                 }
+
+                finishLogin()
             }
+        }
+    }
+
+    private fun getCredentialsInfo(dataString: String) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val data = getSavedCredentials(dataString)
+                sendServerResponse(data)
+            }catch (_: Exception){
+               // error
+                listener.showHome()
+                configureViews(View.INVISIBLE, true)
+            }
+
+        }
+    }
+
+    private fun sendServerResponse(data: String?) {
+        val obj = data?.let { response ->
+            viewModelAuthenticator.fromStringToObjectLoginPassKeyResponse(
+                response
+            )
+        }
+        data?.let {
+            sendSignInResponseToServer(obj)
+        }
+    }
+
+    private fun finishLogin() {
+        viewModel.finishRLogin.observe(viewLifecycleOwner) { _ ->
+            listener.showHome()
+            configureViews(View.INVISIBLE, true)
         }
     }
 
@@ -155,6 +170,21 @@ class SignInFragment : Fragment() {
     private fun sendSignInResponseToServer(obj: PasskeyLoginResponse?){
 
         if (obj != null) {
+          //
+            val userData = viewModelAuthenticator.getUserAccount(obj.id)
+            val publicKey = userData?.publicKey?.toJavaPublicKey()
+
+            if (publicKey!=null){
+                Log.e("RegisterKeyResponse", "sendSignInResponseToServer pk: $publicKey")
+                if (viewModelAuthenticator.verifySignature(obj, publicKey)) {
+
+                    Log.e("RegisterKeyResponse", "Verificada firma")
+                } else {
+
+                    Log.e("RegisterKeyResponse", "Firma invalida")
+                }
+            }
+
             viewModelAuthenticator.recoverUserInfo()
                 ?.let { LoginFinishRequest(it.username, obj) }?.let { viewModel.doLoginFinish(it) }
         }

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.credentialmanager.sample.data.models.LoginFinishRequest
 import com.google.credentialmanager.sample.data.models.LoginStartResponse
 import com.google.credentialmanager.sample.data.models.RegisterFinish
+import com.google.credentialmanager.sample.data.models.SuccessResponse
 import com.google.credentialmanager.sample.data.repository.UserRepository
 import com.google.credentialmanager.sample.data.models.UserRequest
 import com.google.credentialmanager.sample.data.models.UserResponse
@@ -21,13 +22,13 @@ class LoginViewModel(
     private val _userResponse: MutableLiveData<UserResponse> = MutableLiveData()
     val userResponse = _userResponse
 
-    private val _finishRegister: MutableLiveData<Boolean> = MutableLiveData()
+    private val _finishRegister: MutableLiveData<SuccessResponse> = MutableLiveData()
     val finishRegister = _finishRegister
 
     private val _finishLoginStart: MutableLiveData<LoginStartResponse> = MutableLiveData()
     val finishRLoginStart = _finishLoginStart
 
-    private val _finishLogin: MutableLiveData<Boolean> = MutableLiveData()
+    private val _finishLogin: MutableLiveData<SuccessResponse> = MutableLiveData()
     val finishRLogin = _finishLogin
 
     private val _errorHandler: MutableLiveData<BasicErrorHandler> = MutableLiveData()

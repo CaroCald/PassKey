@@ -17,6 +17,7 @@
 package com.google.credentialmanager.sample
 
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -24,6 +25,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.RequiresApi
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CreatePasswordResponse
 import androidx.credentials.CreatePublicKeyCredentialRequest
@@ -39,10 +41,17 @@ import androidx.credentials.exceptions.publickeycredential.CreatePublicKeyCreden
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import co.nstant.`in`.cbor.CborDecoder
+import co.nstant.`in`.cbor.model.ByteString
+import co.nstant.`in`.cbor.model.Map
+import co.nstant.`in`.cbor.model.UnicodeString
 import com.google.credentialmanager.sample.data.models.RegisterFinish
 import com.google.credentialmanager.sample.data.models.RegisterKeyResponse
+import com.google.credentialmanager.sample.data.models.UserData
 import com.google.credentialmanager.sample.data.models.UserRequest
 import com.google.credentialmanager.sample.databinding.FragmentSignUpBinding
+import com.google.credentialmanager.sample.utils.b64Decode
+import com.google.credentialmanager.sample.utils.b64Encode
 import com.google.credentialmanager.sample.viewModel.AutenticatorViewModel
 import com.google.credentialmanager.sample.viewModel.LoginViewModel
 import com.google.credentialmanager.sample.viewModel.ViewModelAutenticatorFactory
@@ -50,6 +59,7 @@ import com.google.credentialmanager.sample.viewModel.ViewModelLoginFactory
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.WithFragmentBindings
 import kotlinx.coroutines.launch
+import java.time.Instant
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -89,6 +99,7 @@ class SignUpFragment : Fragment() {
         return binding.root
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupViewModel()
@@ -145,6 +156,7 @@ class SignUpFragment : Fragment() {
         }, 2000)
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun signUpWithPasskeys(): View.OnClickListener {
         return View.OnClickListener {
 
@@ -164,9 +176,9 @@ class SignUpFragment : Fragment() {
                         registerPasskey(data)
                     }
                     viewModel.finishRegister.observe(viewLifecycleOwner){
-                        if (it){
+                        if (it!=null){
                             viewModelAuthenticator.saveUser(user)
-                            DataProvider.setSignedInThroughPasskeys(it)
+                            DataProvider.setSignedInThroughPasskeys(true)
                             listener.showHome()
                         } else{
                             activity?.showErrorAlert("Error finish register with server")
@@ -178,6 +190,7 @@ class SignUpFragment : Fragment() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun registerPasskey(data: String){
         viewLifecycleOwner.lifecycleScope.launch{
             val dataPasskey = createPasskey(CreatePublicKeyCredentialRequest(data))
@@ -193,9 +206,23 @@ class SignUpFragment : Fragment() {
         viewModel.getUserResponse(user)
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun  finishRegisterFromServer(response: RegisterKeyResponse){
         val registerFinish = RegisterFinish( user.username, response)
+
+
+        val attestationObject = CborDecoder.decode(response.response.attestationObject.b64Decode()).first()
+        val authData = (attestationObject as Map).get(UnicodeString("authData")) as ByteString
+        val publicKey = parseAuthData(authData.bytes)
+        val userData = UserData(response.id, user.username, publicKey.b64Encode(), Instant.now().epochSecond)
+
+        viewModelAuthenticator.saveUserAccount(response.id, userData)
         viewModel.getRegisterFinish(registerFinish)
+    }
+
+    private fun parseAuthData(buffer: ByteArray): ByteArray {
+        val credentialIdLength = buffer.copyOfRange(53, 55)
+        return buffer.copyOfRange(55 + credentialIdLength[1].toInt(), buffer.size)
     }
     private suspend fun createPassword() {
         val request = CreatePasswordRequest(
@@ -279,6 +306,7 @@ class SignUpFragment : Fragment() {
         activity?.showErrorAlert(msg)
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun registerResponse(createPublicKeyCredentialResponse: CreatePublicKeyCredentialResponse) {
         println(createPublicKeyCredentialResponse)
         val obj = viewModelAuthenticator.getResponseInObject(createPublicKeyCredentialResponse.registrationResponseJson)
